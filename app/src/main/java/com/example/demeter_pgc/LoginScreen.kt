@@ -48,7 +48,12 @@ import com.google.firebase.auth.auth
 
 @Preview
 @Composable
-fun LoginScreen(onClickRegister :() -> Unit = {}, onSuccessfulLogin :() -> Unit = {}){
+
+fun LoginScreen(
+    onClickRegister: () -> Unit = {},
+    onSuccessfulLogin: () -> Unit = {},
+    onClickForgotPassword: () -> Unit = {}
+) {
 
     // Usamos LocalContext.current para obtener el contexto de manera segura en Compose.
     val context = LocalContext.current
@@ -153,6 +158,7 @@ fun LoginScreen(onClickRegister :() -> Unit = {}, onSuccessfulLogin :() -> Unit 
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                 )
             }
+
             // Texto de error al iniciar secion
 
             Button(onClick = {
@@ -200,6 +206,12 @@ fun LoginScreen(onClickRegister :() -> Unit = {}, onSuccessfulLogin :() -> Unit 
             ) {
                 Text("Iniciar Sesión")
 
+            }
+            // Botón de recuperar contraseña
+            Spacer(modifier = Modifier.height(8.dp))
+
+            TextButton(onClick = onClickForgotPassword) {
+                Text("¿Olvidaste tu contraseña?", color = Color(0xFF0C7211))
             }
             // Botón para registrarse
             Spacer(modifier = Modifier.height(16.dp))

@@ -14,16 +14,25 @@ fun NavigationApp() {
         navController = myNavController,
         startDestination = myStartDestination,
     ) {
-        composable("login") {
-            LoginScreen(onClickRegister = {
-                myNavController.navigate("register")
-            }, onSuccessfulLogin ={
-                myNavController.navigate("home"){
-                    popUpTo("login"){
-                        inclusive = true
-                    }
-                }
+        composable("forgot_password") {
+            ForgotPasswordScreen(onClickBack = {
+                myNavController.popBackStack()
             })
+        }
+        composable("login") {
+            LoginScreen(
+                onClickRegister = {
+                    myNavController.navigate("register")
+                },
+                onSuccessfulLogin = {
+                    myNavController.navigate("home") {
+                        popUpTo("login") { inclusive = true }
+                    }
+                },
+                onClickForgotPassword = {
+                    myNavController.navigate("forgot_password")
+                }
+            )
         }
         composable("register") {
             RegisterScreen(

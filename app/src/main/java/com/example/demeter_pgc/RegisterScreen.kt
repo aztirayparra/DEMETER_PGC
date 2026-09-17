@@ -220,10 +220,10 @@ fun RegisterScreen (onClickBack :() -> Unit = {},onSuccessfullRegister:()-> Unit
                                     if(task.isSuccessful){
                                         onSuccessfullRegister()
                                     }else{
-                                        registerError=when(task.isSuccessful){
-                                            is FirebaseAuthInvalidCredentialsException->"correo invalido"
-                                            is FirebaseAuthUserCollisionException ->"correo ya registrado"
-                                            else -> "error al registrarse"
+                                        registerError = when (task.exception) {
+                                            is FirebaseAuthInvalidCredentialsException -> "Correo inválido"
+                                            is FirebaseAuthUserCollisionException -> "Ese correo ya está registrado"
+                                            else -> "Error al registrarse, intenta de nuevo"
                                         }
                                     }
                                 }
