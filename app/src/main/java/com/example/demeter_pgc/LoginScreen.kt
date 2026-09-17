@@ -46,6 +46,18 @@ import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.auth
 
+import android.util.Log
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.compose.material3.OutlinedButton
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.firebase.auth.GoogleAuthProvider
+import kotlinx.coroutines.launch
+
 @Preview
 @Composable
 
@@ -64,6 +76,56 @@ fun LoginScreen(
     var loginError by remember { mutableStateOf("") } //Error:
     var emailError by remember { mutableStateOf("") }
     var passwordError by remember { mutableStateOf("") }
+    var googleError by remember { mutableStateOf("") }
+    val coroutineScope = rememberCoroutineScope()
+    fun signInWithGoogle() {
+        coroutineScope.launch {
+            try {
+                val credentialManager = CredentialManager.create(context)
+
+                val googleIdOption = GetGoogleIdOption.Builder()
+                    .setFilterByAuthorizedAccounts(false)
+                    .setServerClientId("660906642132-dfds4a1kn1bc8ja8gd53cehnu3poichh.apps.googleusercontent.com")
+                    .build()
+
+                val request = GetCredentialRequest.Builder()
+                    .addCredentialOption(googleIdOption)
+                    .build()
+
+                val result = credentialManager.getCredential(
+                    request = request,
+                    context = context
+                )
+
+                when (val credential = result.credential) {
+                    is CustomCredential -> {
+                        if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                            val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                            val idToken = googleIdTokenCredential.idToken
+                            val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
+
+                            Firebase.auth.signInWithCredential(firebaseCredential)
+                                .addOnCompleteListener(context as Activity) { task ->
+                                    if (task.isSuccessful) {
+                                        onSuccessfulLogin()
+                                    } else {
+                                        googleError = "Error al iniciar sesión con Google"
+                                    }
+                                }
+                        } else {
+                            googleError = "Tipo de credencial no soportado"
+                        }
+                    }
+                    else -> {
+                        googleError = "Tipo de credencial no soportado"
+                    }
+                }
+            } catch (e: GetCredentialException) {
+                googleError = "No se pudo iniciar sesión con Google"
+                Log.e("GoogleSignIn", "Error: ${e.message}")
+            }
+        }
+    }
 
     Scaffold { paddingValues ->
         Column(modifier = Modifier
@@ -212,6 +274,24 @@ fun LoginScreen(
 
             TextButton(onClick = onClickForgotPassword) {
                 Text("¿Olvidaste tu contraseña?", color = Color(0xFF0C7211))
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedButton(
+                onClick = { signInWithGoogle() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+            ) {
+                Text("Continuar con Google")
+            }
+
+            if (googleError.isNotEmpty()) {
+                Text(
+                    googleError,
+                    color = Color.Red,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
             }
             // Botón para registrarse
             Spacer(modifier = Modifier.height(16.dp))

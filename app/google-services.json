@@ -12,7 +12,20 @@
           "package_name": "com.example.demeter_pgc"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "660906642132-vf8h0evlmb8kk1brn5lrieg7se4cuq8u.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.demeter_pgc",
+            "certificate_hash": "f5d371dff8e507285c8e6560a88358cb9b004fdb"
+          }
+        },
+        {
+          "client_id": "660906642132-dfds4a1kn1bc8ja8gd53cehnu3poichh.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAJg3Unfkwesj5W8SKstsdVhjNLap95xoA"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "660906642132-dfds4a1kn1bc8ja8gd53cehnu3poichh.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
