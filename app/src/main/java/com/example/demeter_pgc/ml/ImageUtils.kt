@@ -16,7 +16,7 @@ import androidx.camera.core.ImageProxy
  *
  * Debe llamarse ANTES de cerrar el ImageProxy (image.close()).
  */
-fun ImageProxy.toBitmap(): Bitmap {
+fun ImageProxy.toClassifierBitmap(): Bitmap {
     val buffer = planes[0].buffer
     val bytes = ByteArray(buffer.remaining())
     buffer.get(bytes)

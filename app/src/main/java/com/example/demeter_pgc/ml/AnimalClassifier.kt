@@ -2,12 +2,15 @@ package com.example.demeter_pgc.ml
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.util.Log
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.channels.FileChannel
+
+private const val TAG = "AnimalClassifier"
 
 /**
  * Resultado de una clasificación: el animal detectado y su confianza (0f..1f).
@@ -21,9 +24,10 @@ data class ClassificationResult(
  * Envoltorio sobre el intérprete de TensorFlow Lite para clasificar entre los
  * animales definidos en labels.txt (caballo, gallina, gato, oveja, perro, vaca).
  *
- * No usa la librería tensorflow-lite-support (tiene un bug de namespace
- * duplicado con versiones nuevas de AGP); el preprocesamiento de la imagen
- * se hace a mano con Bitmap y ByteBuffer.
+ * Detecta automáticamente si el modelo espera la imagen en formato
+ * [1, alto, ancho, canales] (NHWC, típico de TensorFlow/Keras) o
+ * [1, canales, alto, ancho] (NCHW, típico de modelos exportados desde
+ * PyTorch/YOLO), para armar el buffer de entrada en el orden correcto.
  */
 class AnimalClassifier(
     context: Context,
@@ -34,6 +38,8 @@ class AnimalClassifier(
     private val labels: List<String>
     private val inputWidth: Int
     private val inputHeight: Int
+    private val inputChannels: Int
+    private val isChannelsFirst: Boolean
     private val inputDataType: DataType
     private val outputSize: Int
 
@@ -45,13 +51,32 @@ class AnimalClassifier(
             .filter { it.isNotBlank() }
 
         val inputTensor = interpreter.getInputTensor(0)
-        val inputShape = inputTensor.shape() // esperado: [1, alto, ancho, 3]
-        inputHeight = inputShape[1]
-        inputWidth = inputShape[2]
+        val inputShape = inputTensor.shape()
         inputDataType = inputTensor.dataType()
 
-        val outputShape = interpreter.getOutputTensor(0).shape() // esperado: [1, numClases]
+        // Si la segunda posición del shape es 3 (y no coincide con la última),
+        // asumimos formato NCHW: [1, canales, alto, ancho].
+        // Si no, asumimos el formato más común, NHWC: [1, alto, ancho, canales].
+        isChannelsFirst = inputShape.size == 4 && inputShape[1] == 3 && inputShape[3] != 3
+        if (isChannelsFirst) {
+            inputChannels = inputShape[1]
+            inputHeight = inputShape[2]
+            inputWidth = inputShape[3]
+        } else {
+            inputHeight = inputShape[1]
+            inputWidth = inputShape[2]
+            inputChannels = inputShape[3]
+        }
+
+        Log.d(
+            TAG,
+            "Input shape=${inputShape.joinToString()} dataType=$inputDataType " +
+                    "channelsFirst=$isChannelsFirst width=$inputWidth height=$inputHeight"
+        )
+
+        val outputShape = interpreter.getOutputTensor(0).shape()
         outputSize = outputShape[outputShape.size - 1]
+        Log.d(TAG, "Output shape=${outputShape.joinToString()}")
     }
 
     private fun loadModelFile(context: Context, fileName: String): ByteBuffer {
@@ -80,32 +105,39 @@ class AnimalClassifier(
                 bestIndex = i
             }
         }
-
+        Log.d(TAG, "Probabilidades: " + labels.zip(probabilities.toList()).joinToString())
         val label = labels.getOrElse(bestIndex) { "Desconocido" }
         return ClassificationResult(label = label, confidence = probabilities[bestIndex])
     }
 
     private fun convertBitmapToByteBuffer(bitmap: Bitmap): ByteBuffer {
         val bytesPerChannel = if (inputDataType == DataType.FLOAT32) 4 else 1
-        val byteBuffer = ByteBuffer.allocateDirect(inputWidth * inputHeight * 3 * bytesPerChannel)
+        val byteBuffer = ByteBuffer.allocateDirect(inputWidth * inputHeight * inputChannels * bytesPerChannel)
         byteBuffer.order(ByteOrder.nativeOrder())
 
         val pixels = IntArray(inputWidth * inputHeight)
         bitmap.getPixels(pixels, 0, inputWidth, 0, 0, inputWidth, inputHeight)
 
-        for (pixel in pixels) {
-            val r = (pixel shr 16) and 0xFF
-            val g = (pixel shr 8) and 0xFF
-            val b = pixel and 0xFF
-
+        fun writeValue(value: Int) {
             if (inputDataType == DataType.FLOAT32) {
-                byteBuffer.putFloat(r / 255f)
-                byteBuffer.putFloat(g / 255f)
-                byteBuffer.putFloat(b / 255f)
+                byteBuffer.putFloat(value / 255f)
             } else {
-                byteBuffer.put(r.toByte())
-                byteBuffer.put(g.toByte())
-                byteBuffer.put(b.toByte())
+                byteBuffer.put(value.toByte())
+            }
+        }
+
+        if (isChannelsFirst) {
+            // Formato [canales, alto, ancho]: primero todos los valores de
+            // Rojo, luego todos los de Verde, luego todos los de Azul.
+            for (pixel in pixels) writeValue((pixel shr 16) and 0xFF) // R
+            for (pixel in pixels) writeValue((pixel shr 8) and 0xFF)  // G
+            for (pixel in pixels) writeValue(pixel and 0xFF)          // B
+        } else {
+            // Formato [alto, ancho, canales]: R, G, B intercalados por píxel.
+            for (pixel in pixels) {
+                writeValue((pixel shr 16) and 0xFF) // R
+                writeValue((pixel shr 8) and 0xFF)  // G
+                writeValue(pixel and 0xFF)           // B
             }
         }
         return byteBuffer

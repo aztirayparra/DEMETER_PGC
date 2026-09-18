@@ -46,7 +46,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.example.demeter_pgc.ml.AnimalClassifier
 import com.example.demeter_pgc.ml.ClassificationResult
-import com.example.demeter_pgc.ml.toBitmap
+import com.example.demeter_pgc.ml.toClassifierBitmap
 import java.util.Locale
 
 private const val TAG = "CameraScreen"
@@ -199,7 +199,7 @@ fun CameraScreen(onBack: () -> Unit) {
                         object : ImageCapture.OnImageCapturedCallback() {
                             override fun onCaptureSuccess(image: ImageProxy) {
                                 try {
-                                    val bitmap = image.toBitmap()
+                                    val bitmap = image.toClassifierBitmap()
                                     classificationResult = classifier.classify(bitmap)
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Error al clasificar la imagen", e)
