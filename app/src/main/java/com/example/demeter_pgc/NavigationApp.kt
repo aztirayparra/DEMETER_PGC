@@ -46,7 +46,31 @@ fun NavigationApp() {
             )
         }
         composable("home") {
-            HomeScreen()
+            HomeScreen(
+                onNavigateToCamera = {
+                    myNavController.navigate("camera")
+                },
+                onNavigateToHistory = {
+                    myNavController.navigate("history")
+                },
+                onNavigateToCameraManagement = {
+                    myNavController.navigate("cameras")
+                },
+                onLogout = {
+                    myNavController.navigate("login") {
+                        popUpTo(0)
+                    }
+                }
+            )
+        }
+        composable("camera") {
+            CameraScreen(onBack = { myNavController.popBackStack() })
+        }
+        composable("history") {
+            HistoryScreen(onBack = { myNavController.popBackStack() })
+        }
+        composable("cameras") {
+            CamerasScreen(onBack = { myNavController.popBackStack() })
         }
     }
 }
