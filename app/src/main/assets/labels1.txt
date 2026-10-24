@@ -1,0 +1,6 @@
+caballo
+gallina
+gato
+oveja
+perro
+vaca

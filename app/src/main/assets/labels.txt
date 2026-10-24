@@ -1,6 +1,7 @@
 caballo
 gallina
 gato
+otro
 oveja
 perro
 vaca
