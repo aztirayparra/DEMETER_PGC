@@ -1,12 +1,16 @@
 package com.example.demeter_pgc
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.Button
@@ -21,6 +25,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,11 +33,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.firestore
 
 /**
  * Pantalla principal de la app.
@@ -52,12 +61,34 @@ fun HomeScreen(
     // Controla si el menú desplegable del ícono de perfil está abierto o cerrado.
     var isMenuExpanded by remember { mutableStateOf(false) }
 
+    // Nombre del usuario, leído de Firestore (usuarios/{uid}).
+    var nombre by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        val user = Firebase.auth.currentUser ?: return@LaunchedEffect
+        // Mientras carga (o si no hay documento) se usa el nombre de la cuenta de Google.
+        nombre = user.displayName ?: ""
+        Firebase.firestore.collection("usuarios").document(user.uid).get()
+            .addOnSuccessListener { doc ->
+                doc.getString("nombre")?.takeIf { it.isNotBlank() }?.let { nombre = it }
+            }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                // Nombre de la app a la izquierda.
+                // Logo + nombre de la app a la izquierda.
                 title = {
-                    Text("DEMETER PGC", fontWeight = FontWeight.Bold, color = Color(0xFF0C7211))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Image(
+                            painter = painterResource(id = R.drawable.demeter),
+                            contentDescription = "Logo Demeter",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("DEMETER PGC", fontWeight = FontWeight.Bold, color = Color(0xFF0C7211))
+                    }
                 },
                 // Ícono de perfil a la derecha, con menú de "Cerrar sesión".
                 actions = {
@@ -91,6 +122,26 @@ fun HomeScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            // Saludo grande en verde.
+            Text(
+                text = if (nombre.isBlank()) "¡Bienvenido!" else "¡Bienvenido, $nombre!",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF0C7211),
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Pregunta en letra más pequeña.
+            Text(
+                text = "¿Qué desea realizar?",
+                fontSize = 16.sp,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
             // Botón principal: lleva a la pantalla de la cámara y clasificación.
             Button(
                 onClick = onNavigateToCamera,
