@@ -48,7 +48,8 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.auth
-
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.firestore
 @OptIn(ExperimentalMaterial3Api::class)
 @Preview
 @Composable
@@ -217,8 +218,20 @@ fun RegisterScreen (onClickBack :() -> Unit = {},onSuccessfullRegister:()-> Unit
                     if (isValidName && isValidEmail && isValidPassword && isValidConfirmPassword) {
                         auth.createUserWithEmailAndPassword(inputEmail,inputPassword).
                                 addOnCompleteListener (activity) { task ->
-                                    if(task.isSuccessful){
-                                        onSuccessfullRegister()
+                                    if (task.isSuccessful) {
+                                        val user = task.result.user!!
+                                        val perfil = hashMapOf(
+                                            "nombre" to inputName.trim(),
+                                            "correo" to user.email,
+                                            "fechaCreacion" to FieldValue.serverTimestamp()
+                                        )
+                                        Firebase.firestore.collection("usuarios")
+                                            .document(user.uid)          // el ID del documento = UID
+                                            .set(perfil)
+                                            .addOnSuccessListener { onSuccessfullRegister() }
+                                            .addOnFailureListener {
+                                                registerError = "Cuenta creada, pero no se pudo guardar el perfil"
+                                            }
                                     }else{
                                         registerError = when (task.exception) {
                                             is FirebaseAuthInvalidCredentialsException -> "Correo inválido"

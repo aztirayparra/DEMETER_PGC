@@ -57,6 +57,8 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.launch
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.firestore
 
 @Preview
 @Composable
@@ -107,6 +109,19 @@ fun LoginScreen(
                             Firebase.auth.signInWithCredential(firebaseCredential)
                                 .addOnCompleteListener(context as Activity) { task ->
                                     if (task.isSuccessful) {
+                                        val user = task.result.user!!
+                                        if (task.result.additionalUserInfo?.isNewUser == true) {
+                                            // Primera vez con Google: se crea su perfil
+                                            Firebase.firestore.collection("usuarios")
+                                                .document(user.uid)
+                                                .set(
+                                                    hashMapOf(
+                                                        "nombre" to (user.displayName ?: ""),
+                                                        "correo" to user.email,
+                                                        "fechaCreacion" to FieldValue.serverTimestamp()
+                                                    )
+                                                )
+                                        }
                                         onSuccessfulLogin()
                                     } else {
                                         googleError = "Error al iniciar sesión con Google"
