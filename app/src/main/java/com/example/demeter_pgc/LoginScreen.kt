@@ -45,6 +45,11 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.auth
+import androidx.compose.material3.AlertDialog
+import com.google.firebase.auth.EmailAuthProvider
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.firestore
 
 import android.util.Log
 import androidx.compose.runtime.rememberCoroutineScope
@@ -57,8 +62,6 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.launch
-import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.firestore
 
 @Preview
 @Composable
@@ -79,6 +82,18 @@ fun LoginScreen(
     var emailError by remember { mutableStateOf("") }
     var passwordError by remember { mutableStateOf("") }
     var googleError by remember { mutableStateOf("") }
+
+    // Ventana "Completa tu registro" (solo para quien entra con Google por primera vez)
+    var showNameDialog by remember { mutableStateOf(false) }
+    var dialogName by remember { mutableStateOf("") }
+    var dialogPassword by remember { mutableStateOf("") }
+    var dialogConfirm by remember { mutableStateOf("") }
+    var dialogNameError by remember { mutableStateOf("") }
+    var dialogPasswordError by remember { mutableStateOf("") }
+    var dialogConfirmError by remember { mutableStateOf("") }
+    var pedirPassword by remember { mutableStateOf(false) }
+    var perfilExistia by remember { mutableStateOf(false) }
+    var guardandoPerfil by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     fun signInWithGoogle() {
         coroutineScope.launch {
@@ -110,19 +125,22 @@ fun LoginScreen(
                                 .addOnCompleteListener(context as Activity) { task ->
                                     if (task.isSuccessful) {
                                         val user = task.result.user!!
-                                        if (task.result.additionalUserInfo?.isNewUser == true) {
-                                            // Primera vez con Google: se crea su perfil
-                                            Firebase.firestore.collection("usuarios")
-                                                .document(user.uid)
-                                                .set(
-                                                    hashMapOf(
-                                                        "nombre" to (user.displayName ?: ""),
-                                                        "correo" to user.email,
-                                                        "fechaCreacion" to FieldValue.serverTimestamp()
-                                                    )
-                                                )
-                                        }
-                                        onSuccessfulLogin()
+                                        Firebase.firestore.collection("usuarios").document(user.uid).get()
+                                            .addOnSuccessListener { doc ->
+                                                if (doc.exists() && !doc.getString("nombre").isNullOrBlank()) {
+                                                    // Ya tiene perfil con nombre: entra directo
+                                                    onSuccessfulLogin()
+                                                } else {
+                                                    // Primera vez: se completa el registro
+                                                    perfilExistia = doc.exists()
+                                                    pedirPassword = user.providerData.none { it.providerId == "password" }
+                                                    dialogName = user.displayName ?: ""
+                                                    showNameDialog = true
+                                                }
+                                            }
+                                            .addOnFailureListener {
+                                                googleError = "No se pudo verificar tu perfil. Intenta de nuevo"
+                                            }
                                     } else {
                                         googleError = "Error al iniciar sesión con Google"
                                     }
@@ -140,6 +158,130 @@ fun LoginScreen(
                 Log.e("GoogleSignIn", "Error: ${e.message}")
             }
         }
+    }
+
+    // Ventana para completar el registro cuando se entra con Google por primera vez.
+    // El correo es el de la cuenta de Google (no se pide). Se piden nombre y contraseña.
+    if (showNameDialog) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Completa tu registro") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    OutlinedTextField(
+                        value = dialogName,
+                        onValueChange = { dialogName = it; dialogNameError = "" },
+                        label = { Text("Nombre") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = dialogNameError.isNotEmpty(),
+                        supportingText = {
+                            if (dialogNameError.isNotEmpty()) Text(dialogNameError, color = Color.Red)
+                        }
+                    )
+
+                    if (pedirPassword) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = dialogPassword,
+                            onValueChange = { dialogPassword = it; dialogPasswordError = "" },
+                            label = { Text("Contraseña") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            visualTransformation = PasswordVisualTransformation(),
+                            isError = dialogPasswordError.isNotEmpty(),
+                            supportingText = {
+                                if (dialogPasswordError.isNotEmpty()) Text(dialogPasswordError, color = Color.Red)
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = dialogConfirm,
+                            onValueChange = { dialogConfirm = it; dialogConfirmError = "" },
+                            label = { Text("Confirmar contraseña") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            visualTransformation = PasswordVisualTransformation(),
+                            isError = dialogConfirmError.isNotEmpty(),
+                            supportingText = {
+                                if (dialogConfirmError.isNotEmpty()) Text(dialogConfirmError, color = Color.Red)
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !guardandoPerfil,
+                    onClick = {
+                        val (nombreOk, nombreErr) = validateName(dialogName.trim())
+                        dialogNameError = nombreErr
+
+                        var passOk = true
+                        if (pedirPassword) {
+                            val (pOk, pErr) = validatePassword(dialogPassword)
+                            val (cOk, cErr) = validateConfirmPassword(dialogPassword, dialogConfirm)
+                            dialogPasswordError = pErr
+                            dialogConfirmError = cErr
+                            passOk = pOk && cOk
+                        }
+
+                        val user = Firebase.auth.currentUser
+                        if (nombreOk && passOk && user != null) {
+                            guardandoPerfil = true
+
+                            val guardarPerfil = {
+                                val perfil = hashMapOf<String, Any?>(
+                                    "nombre" to dialogName.trim(),
+                                    "correo" to user.email
+                                )
+                                // La fecha de creación solo se pone si el perfil no existía
+                                if (!perfilExistia) perfil["fechaCreacion"] = FieldValue.serverTimestamp()
+
+                                Firebase.firestore.collection("usuarios").document(user.uid)
+                                    .set(perfil, SetOptions.merge())
+                                    .addOnSuccessListener {
+                                        guardandoPerfil = false
+                                        showNameDialog = false
+                                        dialogPassword = ""
+                                        dialogConfirm = ""
+                                        onSuccessfulLogin()
+                                    }
+                                    .addOnFailureListener {
+                                        guardandoPerfil = false
+                                        dialogNameError = "No se pudo guardar. Intenta de nuevo"
+                                    }
+                            }
+
+                            if (pedirPassword) {
+                                // Vincula correo + contraseña a la cuenta de Google (mismo UID)
+                                val credencial = EmailAuthProvider.getCredential(user.email!!, dialogPassword)
+                                user.linkWithCredential(credencial)
+                                    .addOnSuccessListener {
+                                        pedirPassword = false
+                                        guardarPerfil()
+                                    }
+                                    .addOnFailureListener {
+                                        guardandoPerfil = false
+                                        dialogPasswordError = "No se pudo crear la contraseña. Intenta de nuevo"
+                                    }
+                            } else {
+                                guardarPerfil()
+                            }
+                        }
+                    }
+                ) { Text(if (guardandoPerfil) "Guardando..." else "Continuar") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    // Si cancela, cerramos la sesión para que la próxima vez se lo pida otra vez
+                    Firebase.auth.signOut()
+                    showNameDialog = false
+                    dialogPassword = ""
+                    dialogConfirm = ""
+                }) { Text("Cancelar") }
+            }
+        )
     }
 
     Scaffold { paddingValues ->
@@ -179,14 +321,14 @@ fun LoginScreen(
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
-               supportingText = {
+                supportingText = {
                     if (emailError.isNotEmpty()) {
                         Text(
                             text = emailError,
                             color = Color.Red
                         )
                     }
-               },keyboardOptions = KeyboardOptions(
+                },keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.None,
                     autoCorrect = false,
                     keyboardType = KeyboardType.Email
@@ -195,7 +337,7 @@ fun LoginScreen(
 
 
 
-                )
+            )
             // Campo de texto para la contraseña
             Spacer(modifier = Modifier.height(16.dp))
             OutlinedTextField(
@@ -324,8 +466,7 @@ fun LoginScreen(
 
 
 
-            // Aquí van tus campos de texto,
-            // botones, etc.
-            // Ejemplo:
-            // Text(text = "Login Screen")
-
+// Aquí van tus campos de texto,
+// botones, etc.
+// Ejemplo:
+// Text(text = "Login Screen")
